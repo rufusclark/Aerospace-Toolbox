@@ -22,3 +22,15 @@ A collection of tools and scripts for the design and analysis of aerospace vehic
 
 * Support for stochastic monte-carlo simulations using predefined and user-defined input distributions
 * Support for simulating different failure modes with simulation flags
+
+## Usage
+
+You can download this code yourself, run the included scripts and generate your own as follows,
+
+0. Requires python3.12 and pip
+1. Download the project. Press the "Code" button then "Download ZIP".
+2. Extract the zip file in your working directory.
+3. Install python requirements ```pip install -r requirements.txt```
+4. Run the jupyter notebook scripts.
+
+> xFoil and RASAero II may also be required depending on usage. If required this will be highlighted including with installation instructions within error messages.
