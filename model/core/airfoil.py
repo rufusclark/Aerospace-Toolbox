@@ -548,7 +548,8 @@ class AirfoilManager:
                 TT = round(thickness * 100)
                 airfoil_name = f"NACA {M}{P}{TT:02d}"
 
-                # inputs = {'camber': camber, 'camber_location': camber_location, 'thickness': thickness}
+                # inputs = {
+                #     'camber': camber, 'camber_location': camber_location, 'thickness': thickness}
                 # print(f"'{airfoil_name}' generated from {inputs}")
             else:
                 raise ValueError(

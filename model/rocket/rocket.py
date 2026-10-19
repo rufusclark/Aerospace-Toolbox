@@ -555,6 +555,12 @@ class RocketGenerator(ComponentGenerator[RocketState]):
 
                     from model.core.airfoil import AirfoilManager
 
+                    # print(
+                    #     f"{thickness_ratio=}\n"
+                    #     f"{thickness}\n"
+                    #     f"{chord}"
+                    # )
+
                     airfoil = AirfoilManager().get_airfoil(
                         thickness=thickness_ratio,
                         alpha_min=0,
