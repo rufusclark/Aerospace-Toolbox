@@ -1,0 +1,42 @@
+# Python Cache
+__pycache__/
+*.pyc
+
+# VSCode Settings
+.vscode/
+
+# Logs
+*.log
+
+# Data
+data/
+
+# Outputs
+outputs/
+
+# Software
+software/
+
+# Docs
+docs/
+
+# Models
+model/*
+
+# Specifically allow modules
+!model/rocket
+!model/core
+!model/util
+
+# Analysis
+*_analysis.py
+
+# Tests
+*test.py
+
+# Manually ignore files
+pdf_converter.py
+run_all.py
+weather.py
+Aircraft System Model.ipynb
+hot_fire.py
