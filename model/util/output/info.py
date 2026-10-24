@@ -338,7 +338,7 @@ class Table(Generic[T, P]):
 
         print(df.to_string(
             index=False,
-            float_format="{:.2f}".format
+            float_format="{:.3f}".format
         ))
 
 # TODO: Delete old path implementation

@@ -330,18 +330,45 @@ class Plots(Generic[T, P]):
         figsize: tuple[float, float] | None = None,
         xlim: tuple[Any, Any] | None = None,
         ylim: tuple[Any, Any] | None = None,
+        *,
+        xkcd: bool = False
     ):
+        if xkcd:
+            plt_params = plt.rcParams.copy()
+            plt.rcParams["text.usetex"] = False
+            plt.xkcd()
+            plt.rcParams.update({
+                "font.size": 9,
+                "axes.titlesize": 10,
+                "axes.labelsize": 9,
+                "xtick.labelsize": 8,
+                "ytick.labelsize": 8,
+                "legend.fontsize": 8,
+                "mathtext.fontset": "custom",
+                "mathtext.rm": "xkcd",
+                "mathtext.it": "xkcd",
+                "mathtext.bf": "xkcd",
+                "mathtext.default": "regular",
+            })
+
         fig = self.fig(
             figsize=figsize,
             xlim=xlim,
             ylim=ylim
         )
 
+        if xkcd:
+            for ax in fig.get_axes():
+                ax.grid(False)
+
         if self.path:
             fig.suptitle(self.path.method_name.replace("-", " ").title())
 
         plt.show()
         plt.close(fig)
+
+        if xkcd:
+            plt.rcParams.update(plt_params)
 
     def fig(
         self,
