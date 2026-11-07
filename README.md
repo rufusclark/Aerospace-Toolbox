@@ -42,7 +42,7 @@ You can download this code yourself, run the included scripts and generate your 
 
 #### Input Distributions
 
-The monte carlo simulation supports fixed values, normal distributions and uniform distributions as inputs by default. If no input distribution is provided the default distributions below are used. Further/custom distributions are supported by extension.
+The Monte Carlo simulation supports fixed values, normal distributions and uniform distributions as inputs by default. If no input distribution is provided the default distributions below are used. Further/custom distributions are supported by extension.
 
 ```python
 diameter = Normal(76 / 1000, std=1 / 1000)
@@ -111,7 +111,7 @@ Please note these only apply where relevant and they have not be overwrite by sp
 | Wind u | Normal(x̄=x, σ=1 m/s) |
 | Wind v | Normal(x̄=x, σ=1 m/s) |
 | Wind speed | Normal(x̄=x, σ=√2 m/s) |
-| Wing bearing | Normal(x̄=x, σ=10 deg) |
+| Wind bearing | Normal(x̄=x, σ=10 deg) |
 
 > [x] user input/design point
 
