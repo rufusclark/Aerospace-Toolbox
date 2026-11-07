@@ -8,9 +8,12 @@ from .base import OutputType, Path, count, common_suffix
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
+import cartopy.crs as ccrs
+import cartopy.io.img_tiles as cimgt
 import scienceplots
 
 plt.style.use("science")
+plt.rcParams["text.usetex"] = False
 
 __all__ = [
     "scientific_plot",
@@ -176,6 +179,7 @@ class Plots(Generic[T, P]):
             extensions: tuple[str, ...] = (  # type: ignore
                 ".png", ".pdf", ".svg", ".pgf"),
             suppress_prints: bool = False,  # type: ignore
+            xkcd: bool = False,  # type: ignore
             **kwargs: P.kwargs,
     ) -> Plots[T, P]:
 
@@ -238,14 +242,16 @@ class Plots(Generic[T, P]):
                 xlim=xlim,
                 ylim=ylim,
                 extensions=extensions,
-                suppress_prints=suppress_prints
+                suppress_prints=suppress_prints,
+                xkcd=xkcd
             )
 
         if show:
             self.show(
                 figsize=figsize,
                 xlim=xlim,
-                ylim=ylim
+                ylim=ylim,
+                xkcd=xkcd
             )
 
         count.figures += 1
@@ -300,18 +306,42 @@ class Plots(Generic[T, P]):
             ylim=ylim,
         )
 
+    def xkcd_on(self):
+        plt_params = plt.rcParams.copy()
+        plt.xkcd()
+        plt.rcParams.update({
+            "font.size": 9,
+            "axes.titlesize": 10,
+            "axes.labelsize": 9,
+            "xtick.labelsize": 8,
+            "ytick.labelsize": 8,
+            "legend.fontsize": 8,
+            "mathtext.fontset": "custom",
+            "mathtext.rm": "xkcd",
+            "mathtext.it": "xkcd",
+            "mathtext.bf": "xkcd",
+            "mathtext.default": "regular",
+        })
+        return plt_params
+
+    def xkcd_off(self, plt_params) -> None:
+        plt.rcParams.update(plt_params)
+
     def save(
         self,
         figsize: tuple[float, float] | None = None,
         xlim: tuple[Any, Any] | None = None,
         ylim: tuple[Any, Any] | None = None,
         extensions: tuple[str, ...] = (".png", ".pdf", ".svg", ".pgf"),
-        suppress_prints: bool = False
+        suppress_prints: bool = False,
+        *,
+        xkcd: bool = False
     ):
         fig = self.fig(
             figsize=figsize,
             xlim=xlim,
             ylim=ylim,
+            xkcd=xkcd
         )
 
         assert self.path
@@ -333,49 +363,34 @@ class Plots(Generic[T, P]):
         *,
         xkcd: bool = False
     ):
-        if xkcd:
-            plt_params = plt.rcParams.copy()
-            plt.rcParams["text.usetex"] = False
-            plt.xkcd()
-            plt.rcParams.update({
-                "font.size": 9,
-                "axes.titlesize": 10,
-                "axes.labelsize": 9,
-                "xtick.labelsize": 8,
-                "ytick.labelsize": 8,
-                "legend.fontsize": 8,
-                "mathtext.fontset": "custom",
-                "mathtext.rm": "xkcd",
-                "mathtext.it": "xkcd",
-                "mathtext.bf": "xkcd",
-                "mathtext.default": "regular",
-            })
-
         fig = self.fig(
             figsize=figsize,
             xlim=xlim,
-            ylim=ylim
+            ylim=ylim,
+            xkcd=xkcd
         )
 
-        if xkcd:
-            for ax in fig.get_axes():
-                ax.grid(False)
-
         if self.path:
+            if xkcd:
+                plt_params = self.xkcd_on()
             fig.suptitle(self.path.method_name.replace("-", " ").title())
+            if xkcd:
+                self.xkcd_off(plt_params)
 
         plt.show()
         plt.close(fig)
-
-        if xkcd:
-            plt.rcParams.update(plt_params)
 
     def fig(
         self,
         figsize: tuple[float, float] | None = None,
         xlim: tuple[Any, Any] | None = None,
         ylim: tuple[Any, Any] | None = None,
+        *,
+        xkcd: bool = False
     ) -> Figure:
+        if xkcd:
+            plt_params = self.xkcd_on()
+
         figsize = figsize or self.figsize
 
         if not self.plots:
@@ -396,6 +411,7 @@ class Plots(Generic[T, P]):
             figsize=figsize,
             sharex=self.sharex,
             sharey=self.sharey,
+            subplot_kw={},
             squeeze=False,
             constrained_layout=True,
         )
@@ -421,8 +437,10 @@ class Plots(Generic[T, P]):
                 ax.set_ylim(ylim)
 
         # call the plotting function (this is the decorated function)
-        for plot, ax in zip(self.plots, axes):
-            _ = plot.draw(ax)
+        for i, (plot, ax) in enumerate(zip(self.plots, axes)):
+            out = plot.draw(ax)
+            if isinstance(out, Axes):
+                axes[i] = out
 
             # handle superposed plots
             if self.superposed_plots:
@@ -441,10 +459,12 @@ class Plots(Generic[T, P]):
             for plots in self.superposed_plots:
                 assert plots.plots is not None
 
-                for superposed_plot, ax in zip(plots.plots, axes):
+                for i, (superposed_plot, ax) in enumerate(zip(plots.plots, axes)):
                     lines_before = set(ax.get_lines())
 
-                    _ = superposed_plot.draw(ax)
+                    out = superposed_plot.draw(ax)
+                    if isinstance(out, Axes):
+                        axes[i] = out
 
                     new_lines = [
                         line for line in ax.get_lines()
@@ -494,6 +514,11 @@ class Plots(Generic[T, P]):
             old_title = fig_manager.get_window_title()
             title = f"{old_title}: {self.path.title}"
             fig_manager.set_window_title(title)
+
+        if xkcd:
+            for ax in fig.get_axes():
+                ax.grid(False)
+            self.xkcd_off(plt_params)
 
         return fig
 
@@ -628,7 +653,7 @@ def scientific_plot(
             auto_limits=auto_limits,
             figsize=figsize,
             outside_legend=outside_legend,
-            outside_legend_cols=outside_legend_cols
+            outside_legend_cols=outside_legend_cols,
         )
 
     return decorator

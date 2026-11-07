@@ -70,17 +70,17 @@ class InfoBase[T: HasCategoryAndName](OutputType[T]):
 class PlotBase[T: HasCategoryAndName](OutputType[T]):
     output_type = "plot"
 
-    def all(self, *args, show: bool = False, save: bool = True):
+    def all(self, *args, show: bool = False, save: bool = True, xkcd: bool = False):
         from .plot import Plots, _show
 
         for name in dir(type(self)):
             method = getattr(self, name)
 
             if isinstance(method, Plots):
-                plot = method(*args, show=False, save=save)
+                plot = method(*args, show=False, save=save, xkcd=xkcd)
 
                 if show:
-                    plot.fig(*args)
+                    plot.fig(*args, xkcd=xkcd)
 
         if show:
             _show()
@@ -88,6 +88,7 @@ class PlotBase[T: HasCategoryAndName](OutputType[T]):
 #
 # path handling
 #
+
 
 def common_suffix(strings: list[str]):
     if not strings:
@@ -105,6 +106,7 @@ def common_suffix(strings: list[str]):
             return ""
 
     return suffix
+
 
 def common_prefix(a: str, b: str) -> str:
     i = 0

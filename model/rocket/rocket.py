@@ -2,6 +2,7 @@ from typing import Literal, overload, Protocol, TypeVar, Callable, Any, ClassVar
 from dataclasses import dataclass, fields, field, is_dataclass
 import pandas as pd
 import numpy as np
+import math
 import rocketpy
 
 from model.rocket.motor import MotorSearch, Motor
@@ -16,11 +17,16 @@ T = TypeVar("T", covariant=True)
 __all__ = (
     "Uniform",
     "Normal",
+    "Fixed",
     "RocketGenerator",
     "EnvironmentGenerator",
     "LauncherGenerator",
     "FlightGenerator",
 )
+
+#
+# Global Variables
+#
 
 #
 # Types
@@ -145,6 +151,7 @@ class NormalDistribution(Quantity):
 
 Uniform = UniformDistribution
 Normal = NormalDistribution
+Fixed = Quantity
 
 Q = Quantity | float
 
@@ -267,13 +274,13 @@ class State[T]:
 
 @dataclass
 class ComponentState(State[T]):
-    def add(self) -> T:
+    def add(self, options: "SimulationOptionsState") -> T:
         ...
 
 
 @dataclass
 class AssemblyState(State[T]):
-    def make(self) -> T:
+    def make(self, options: "SimulationOptionsState") -> T:
         ...
 
 #
@@ -323,6 +330,80 @@ class ComponentGenerator(SupportsSample[T]):
         return self._transform(lambda q: q.sample())
 
 #
+# Event Modelling
+#
+
+
+@dataclass(frozen=True)
+class SimulationOptionsState:
+    ballistic: bool
+    all_chutes_at_apogee: bool
+
+    @classmethod
+    def default(cls) -> "SimulationOptionsState":
+        """return a copy where all options have default values"""
+        return SimulationOptionsGenerator().ideal()
+
+
+@dataclass
+class SimulationOptionsGenerator(ComponentGenerator[SimulationOptionsState]):
+    """represents the options used within simulations.
+
+    where options are bool they will be set as provided within the simulation. Where options are float (0, 1) they will be set randomly where a probability of 0 represents False and a probability of 1 represents True"""
+    ballistic: bool | float = False
+    """ballistic flight: no separation and no parachutes"""
+    all_chutes_at_apogee: bool | float = False
+    """all parachutes deployed at apogee"""
+
+    _output_type = SimulationOptionsState
+
+    def __post_init__(self) -> None:
+        for field in fields(self):
+            value = getattr(self, field.name)
+            if field.name == "_output_type":
+                continue
+            if isinstance(value, bool):
+                continue
+            if not isinstance(value, float):
+                raise ValueError(
+                    f"{field.name} must be either bool or float in range 0 to 1 inclusive"
+                )
+            if value < 0 or value > 1:
+                raise ValueError(
+                    f"{field.name} must be either bool or float in range 0 to 1 inclusive"
+                )
+
+    def ideal(self) -> SimulationOptionsState:
+        def resolve(value: bool | float) -> bool:
+            if isinstance(value, bool):
+                return value
+            if value == 1:
+                return True
+            else:
+                return False
+
+        return SimulationOptionsState(
+            **{
+                field.name: resolve(getattr(self, field.name))
+                for field in fields(self)
+            }
+        )
+
+    def sample(self) -> SimulationOptionsState:
+        def resolve(value: bool | float) -> bool:
+            if isinstance(value, bool):
+                return value
+            return np.random.random() < value
+
+        return SimulationOptionsState(
+            **{
+                field.name: resolve(getattr(self, field.name))
+                for field in fields(self)
+            }
+        )
+
+
+#
 # Rocket
 #
 
@@ -336,6 +417,7 @@ class RocketState(AssemblyState[rocketpy.Rocket]):
     mass_without_motor: float
     inertia_without_motor: tuple[float, float, float]
     center_of_mass_without_motor: float
+    aero_multiplier: float
     power_off_drag: np.ndarray | None = None
     power_on_drag: np.ndarray | None = None
     aero: Aero | Literal["estimate"] | None = None
@@ -346,6 +428,8 @@ class RocketState(AssemblyState[rocketpy.Rocket]):
     tails: list["TailState"] = field(default_factory=list)
     parachutes: list["ParachuteState"] = field(default_factory=list)
     motor: "MotorState | None" = None
+    aerodynamic_eccentricity: "EccentricityState | None" = None
+    thrust_eccentricity: "EccentricityState | None" = None
 
     def __post_init__(self):
         self.plots = RocketStatePlot(self)
@@ -361,29 +445,67 @@ class RocketState(AssemblyState[rocketpy.Rocket]):
         assert self.fins
         return self.fins.position + self.fins.root_chord - self.nose.length
 
-    def make(self) -> rocketpy.Rocket:
+    def make(self, options: SimulationOptionsState) -> rocketpy.Rocket:
+        if isinstance(self.power_off_drag, (list, tuple, np.ndarray)):
+            power_off_drag = [
+                [mach, cd * self.aero_multiplier]
+                for mach, cd in self.power_off_drag
+            ]
+        else:
+            power_off_drag = self.power_off_drag
+
+        if isinstance(self.power_on_drag, (list, tuple, np.ndarray)):
+            power_on_drag = [
+                [mach, cd * self.aero_multiplier]
+                for mach, cd in self.power_on_drag
+            ]
+        else:
+            power_on_drag = self.power_on_drag
+
         rocket = rocketpy.Rocket(
             radius=self.radius,
             mass=self.mass_without_motor,
             inertia=self.inertia_without_motor,
-            power_off_drag=self.power_off_drag,
-            power_on_drag=self.power_on_drag,
+            power_off_drag=power_off_drag,
+            power_on_drag=power_on_drag,
             center_of_mass_without_motor=self.center_of_mass_without_motor,
             coordinate_system_orientation="nose_to_tail"
         )
 
         if self.rail_buttons is not None:
-            self.rail_buttons.add(rocket)
+            self.rail_buttons.add(rocket, options)
         if self.nose is not None:
-            self.nose.add(rocket)
+            self.nose.add(rocket, options)
         if self.fins is not None:
-            self.fins.add(rocket)
+            self.fins.add(rocket, options)
         if self.tails:
-            [tail.add(rocket) for tail in self.tails]
+            _ = [tail.add(rocket, options) for tail in self.tails]
         if self.parachutes:
-            [parachute.add(rocket) for parachute in self.parachutes]
+            ps = self.parachutes
+
+            if options.ballistic:
+                # no parachutes
+                pass
+
+            elif options.all_chutes_at_apogee:
+                # deploy largest parachute at apogee
+                idx = max(range(len(ps)), key=lambda i: ps[i].cd_s)
+
+                p = ps[idx]
+                p.add(rocket, options=options)
+
+            else:
+                # normal case
+                _ = [parachute.add(rocket, options) for parachute in ps]
+
         if self.motor:
-            self.motor.add(rocket)
+            self.motor.add(rocket, options)
+
+        if self.thrust_eccentricity:
+            self.thrust_eccentricity.add_thrust_eccentricity(rocket, options)
+
+        if self.aerodynamic_eccentricity:
+            self.aerodynamic_eccentricity.add_cp_eccentricity(rocket, options)
 
         return rocket
 
@@ -395,6 +517,7 @@ class RocketGenerator(ComponentGenerator[RocketState]):
     mass_without_motor: Quantity
     inertia_without_motor: tuple[Quantity, Quantity, Quantity]
     center_of_mass_without_motor: Quantity
+    aero_multiplier: Quantity
     power_off_drag: np.ndarray | None = None
     power_on_drag: np.ndarray | None = None
     aero: Aero | Literal["estimate"] | None = None
@@ -405,6 +528,8 @@ class RocketGenerator(ComponentGenerator[RocketState]):
     tails: list["TailGenerator"] = field(default_factory=list)
     parachutes: list["ParachuteGenerator"] = field(default_factory=list)
     motor: "MotorGenerator | None" = None
+    aerodynamic_eccentricity: "EccentricityGenerator | None" = None
+    thrust_eccentricity: "EccentricityGenerator | None" = None
 
     _output_type = RocketState
 
@@ -416,6 +541,7 @@ class RocketGenerator(ComponentGenerator[RocketState]):
         inertia_without_motor: tuple[Q, Q, Q],
         center_of_mass_without_motor: Q,
         aero: Aero | Literal["estimate"] | None = None,
+        aero_multiplier: Q = 1,
         power_off_drag: np.ndarray | None = None,
         power_on_drag: np.ndarray | None = None
     ):
@@ -427,7 +553,7 @@ class RocketGenerator(ComponentGenerator[RocketState]):
         )
         self.mass_without_motor = _handle_input(
             mass_without_motor,
-            default=STANDARD_AXIAL_DISTANCE_DIST
+            default=STANDARD_MASS_DIST
         )
         self.inertia_without_motor: tuple[Quantity, Quantity, Quantity] = _handle_input(
             inertia_without_motor,
@@ -436,6 +562,10 @@ class RocketGenerator(ComponentGenerator[RocketState]):
         self.center_of_mass_without_motor = _handle_input(
             center_of_mass_without_motor,
             default=STANDARD_AXIAL_DISTANCE_DIST
+        )
+        self.aero_multiplier = _handle_input(
+            aero_multiplier,
+            default=lambda x: Normal.from_mean(x, 0.05)
         )
 
         if aero != "estimate":
@@ -460,6 +590,59 @@ class RocketGenerator(ComponentGenerator[RocketState]):
         self.tails: list[TailGenerator] = []
         self.parachutes: list[ParachuteGenerator] = []
         self.motor: MotorGenerator | None = None
+        self.thrust_eccentricity: EccentricityGenerator | None = None
+        self.aerodynamic_eccentricity: EccentricityGenerator | None = None
+
+    def add_aerodynamic_eccentricity(
+        self,
+        distance: Q = 0,
+        direction: Q = 0
+    ):
+        """eccentricity in centre of pressure position"""
+        if direction == 0:
+            direction = _handle_input(
+                direction,
+                default=lambda x: Uniform(0, 360)
+            )
+        else:
+            direction = _handle_input(
+                direction,
+                default=lambda x: Normal(x, 10)
+            )
+
+        self.aerodynamic_eccentricity = EccentricityGenerator(
+            direction=direction,
+            distance=_handle_input(
+                distance,
+                default=lambda x: Normal.from_mean_frac(
+                    x, self.diameter.ideal() * 0.02)
+            )
+        )
+
+    def add_thrust_eccentricity(
+        self,
+        distance: Q = 0,
+        direction: Q = 0
+    ):
+        if direction == 0:
+            direction = _handle_input(
+                direction,
+                default=lambda x: Uniform(0, 360)
+            )
+        else:
+            direction = _handle_input(
+                direction,
+                default=lambda x: Normal(x, 10)
+            )
+
+        self.thrust_eccentricity = EccentricityGenerator(
+            direction=direction,
+            distance=_handle_input(
+                distance,
+                default=lambda x: Normal.from_mean_frac(
+                    x, self.diameter.ideal() * 0.02)
+            )
+        )
 
     def add_rail_buttons(
         self,
@@ -521,6 +704,7 @@ class RocketGenerator(ComponentGenerator[RocketState]):
         position: Q,
         sweep_length: Q | None = None,
         airfoil: airfoil_type = None,
+        aero_multiplier: Q = 1,
         airfoil_type: rasaero.FinAirfoilSections = "Subsonic NACA",
         leading_edge_radius: float | None = None,
         thickness: float | None = None
@@ -587,6 +771,10 @@ class RocketGenerator(ComponentGenerator[RocketState]):
                 default=STANDARD_AXIAL_DISTANCE_DIST
             ),
             airfoil=airfoil,
+            aero_multiplier=_handle_input(
+                aero_multiplier,
+                default=lambda x: Normal.from_mean(x, 0.05)
+            ),
             airfoil_type=airfoil_type,
             leading_edge_radius=leading_edge_radius,
             thickness=thickness
@@ -753,7 +941,9 @@ class RocketStatePlot(PlotBase[RocketState]):
         """adapted from rocketpy.plots.rocket_Plots"""
         from rocketpy.plots.rocket_plots import _RocketPlots
 
-        rocket = _RocketPlots(self.model.make())
+        rocket = _RocketPlots(self.model.make(
+            SimulationOptionsState.default())
+        )
         rocket._RocketPlots__validate_aerodynamic_surfaces(  # type: ignore
             plane)
 
@@ -812,7 +1002,7 @@ class RailButtonState(ComponentState[rocketpy.RailButtons]):
     height: float
     """RAS Aero II parameter for drag estimation"""
 
-    def add(self, rocket: rocketpy.Rocket) -> rocketpy.RailButtons:
+    def add(self, rocket: rocketpy.Rocket, options: SimulationOptionsState) -> rocketpy.RailButtons:
         return rocket.set_rail_buttons(
             upper_button_position=self.upper_button_position,
             lower_button_position=self.lower_button_position,
@@ -842,7 +1032,7 @@ class NoseState(ComponentState[rocketpy.NoseCone]):
     blunt_radius: float | None = None
     """RAS Aero II parameter for drag estimation"""
 
-    def add(self, rocket: rocketpy.Rocket) -> rocketpy.NoseCone:
+    def add(self, rocket: rocketpy.Rocket, options: SimulationOptionsState) -> rocketpy.NoseCone:
         return rocket.add_nose(
             length=self.length,
             kind=self.kind,
@@ -864,12 +1054,41 @@ class NoseGenerator(ComponentGenerator[NoseState]):
 
 
 @dataclass
+class EccentricityState(ComponentState[None]):
+    direction: float
+    distance: float
+
+    @property
+    def x(self) -> float:
+        return self.distance * math.cos(math.radians(self.direction))
+
+    @property
+    def y(self) -> float:
+        return self.distance * math.sin(math.radians(self.direction))
+
+    def add_cp_eccentricity(self, rocket: rocketpy.Rocket, options: SimulationOptionsState):
+        rocket.add_cp_eccentricity(self.x, self.y)
+
+    def add_thrust_eccentricity(self, rocket: rocketpy.Rocket, options: SimulationOptionsState):
+        rocket.add_thrust_eccentricity(self.x, self.y)
+
+
+@dataclass
+class EccentricityGenerator(ComponentGenerator[EccentricityState]):
+    direction: Quantity
+    distance: Quantity
+
+    _output_type = EccentricityState
+
+
+@dataclass
 class TrapezoidalFinsState(ComponentState[rocketpy.TrapezoidalFins]):
     n: int
     root_chord: float
     tip_chord: float
     span: float
     position: float
+    aero_multiplier: float
     sweep_length: float | None
     airfoil: airfoil_type = None
 
@@ -880,7 +1099,16 @@ class TrapezoidalFinsState(ComponentState[rocketpy.TrapezoidalFins]):
     airfoil_type: rasaero.FinAirfoilSections = "Subsonic NACA"
     """RAS Aero II parameter for drag estimation"""
 
-    def add(self, rocket: rocketpy.Rocket) -> rocketpy.TrapezoidalFins:
+    def add(self, rocket: rocketpy.Rocket, options: SimulationOptionsState) -> rocketpy.TrapezoidalFins:
+        if self.airfoil is not None:
+            aero, units = self.airfoil
+            if isinstance(aero, str):
+                airfoil = self.airfoil
+            else:
+                airfoil = self.aero_multiplier * aero, units
+        else:
+            airfoil = self.airfoil
+
         return rocket.add_trapezoidal_fins(
             n=self.n,
             root_chord=self.root_chord,
@@ -888,7 +1116,7 @@ class TrapezoidalFinsState(ComponentState[rocketpy.TrapezoidalFins]):
             span=self.span,
             position=self.position,
             sweep_length=self.sweep_length,
-            airfoil=self.airfoil
+            airfoil=airfoil
         )
 
 
@@ -899,6 +1127,7 @@ class TrapezoidalFinsGenerator(ComponentGenerator[TrapezoidalFinsState]):
     tip_chord: Quantity
     span: Quantity
     position: Quantity
+    aero_multiplier: Quantity
     sweep_length: Quantity | None = None
     airfoil: airfoil_type = None
 
@@ -927,7 +1156,7 @@ class TailState(ComponentState[rocketpy.Tail]):
     def bottom_radius(self) -> float:
         return self.bottom_diameter / 2
 
-    def add(self, rocket: rocketpy.Rocket) -> rocketpy.Tail:
+    def add(self, rocket: rocketpy.Rocket, options: SimulationOptionsState) -> rocketpy.Tail:
         return rocket.add_tail(
             top_radius=self.top_radius,
             bottom_radius=self.bottom_radius,
@@ -963,7 +1192,7 @@ class ParachuteState(ComponentState[rocketpy.Parachute]):
     def cd_s(self) -> float:
         return self.cd * np.pi * self.radius ** 2
 
-    def add(self, rocket: rocketpy.Rocket) -> rocketpy.Parachute:
+    def add(self, rocket: rocketpy.Rocket, options: SimulationOptionsState) -> rocketpy.Parachute:
         match self.trigger:
             case "apogee":
                 trigger_func = "apogee"
@@ -972,6 +1201,9 @@ class ParachuteState(ComponentState[rocketpy.Parachute]):
                     "time", rocket.motor.burn_out_time, self.motor_delay)
             case "altitude":
                 trigger_func = self.deploy_altitude
+
+        if options.all_chutes_at_apogee:
+            trigger_func = "apogee"
 
         return rocket.add_parachute(
             name=self.name,
@@ -1004,11 +1236,12 @@ class MotorState(ComponentState[rocketpy.SolidMotor]):
     nozzle_diameter: float | None = None
     """RAS Aero II parameter for drag estimation"""
 
-    def add(self, rocket: rocketpy.Rocket) -> rocketpy.SolidMotor:
-
-        # TODO: Adjust thrust curve with thrust and time multiplier (within motor.py)
-
-        rocketpy_motor, position_offset = self.motor.to_SolidMotor()
+    def add(self, rocket: rocketpy.Rocket, options: SimulationOptionsState) -> rocketpy.SolidMotor:
+        rocketpy_motor, position_offset = self.motor.scale(
+            time_factor=self.time_multiplier,
+            thrust_factor=self.thrust_multiplier,
+            mass_factor=self.mass_multiplier
+        ).to_SolidMotor()
         rocket.add_motor(
             motor=rocketpy_motor,
             position=self.position - position_offset
@@ -1055,10 +1288,16 @@ class LauncherGenerator(ComponentGenerator[LauncherState]):
             length,
             default=lambda x: Normal.from_mean(x, 10 / 1000)
         )
-        self.heading = _handle_input(
-            heading,
-            default=lambda x: Normal.from_mean(x, 10)
-        )
+        if heading == 0:
+            self.heading = _handle_input(
+                heading,
+                default=lambda x: Uniform(0, 360)
+            )
+        else:
+            self.heading = _handle_input(
+                heading,
+                default=lambda x: Normal.from_mean(x, 10)
+            )
         self.inclination = _handle_input(
             inclination,
             default=lambda x: Normal.from_mean(x, 2)
@@ -1076,7 +1315,7 @@ class EnvironmentState(AssemblyState[rocketpy.Environment]):
     elevation: float
     atmospheric_model: "AtmosphericModelState | None" = None
 
-    def make(self) -> rocketpy.Environment:
+    def make(self, options: SimulationOptionsState) -> rocketpy.Environment:
         env = rocketpy.Environment(
             latitude=self.latitude,
             longitude=self.longitude,
@@ -1084,7 +1323,7 @@ class EnvironmentState(AssemblyState[rocketpy.Environment]):
         )
 
         if self.atmospheric_model is not None:
-            self.atmospheric_model.add(env)
+            self.atmospheric_model.add(env, options)
 
         return env
 
@@ -1104,8 +1343,8 @@ class EnvironmentGenerator(ComponentGenerator[EnvironmentState]):
         longitude: Q,
         elevation: Q = 0
     ) -> None:
-        self.latitude = _handle_input(latitude)
-        self.longitude = _handle_input(longitude)
+        self.latitude = _handle_input(latitude, default=lambda x: Fixed(x))
+        self.longitude = _handle_input(longitude, default=lambda x: Fixed(x))
         self.elevation = _handle_input(
             elevation,
             default=lambda x: Normal.from_mean(x, 5)
@@ -1176,7 +1415,20 @@ class AtmosphericModelState:
                 "either wind_u and wind_v or wind_speed and wind_bearing must be provided"
             )
 
-    def add(self, env: rocketpy.Environment):
+    def add(self, env: rocketpy.Environment, options: SimulationOptionsState):
+        wind_u, wind_v = self.wind_u_v
+
+        env.set_atmospheric_model(
+            type=self.type,
+            pressure=self.pressure,
+            temperature=self.temperature,
+            wind_u=wind_u,  # type: ignore
+            wind_v=wind_v,  # type: ignore
+        )
+
+    @property
+    def wind_u_v(self) -> tuple[float, float]:
+        """wind speed in u and v component [m/s]"""
         if self.wind_u is not None and self.wind_v is not None:
             env_wind_u = self.wind_u
             env_wind_v = self.wind_v
@@ -1189,13 +1441,17 @@ class AtmosphericModelState:
             env_wind_u = 0
             env_wind_v = 0
 
-        env.set_atmospheric_model(
-            type=self.type,
-            pressure=self.pressure,
-            temperature=self.temperature,
-            wind_u=env_wind_u,  # type: ignore
-            wind_v=env_wind_v,  # type: ignore
-        )
+        return env_wind_u, env_wind_v
+
+    @property
+    def wind_direction_speed(self) -> tuple[float, float]:
+        """wind direction [deg] from North and speed [m/s]"""
+        wind_u, wind_v = self.wind_u_v
+
+        wind_direction = float(np.rad2deg(np.arctan2(wind_u, wind_v)) % 360)
+        wind_speed = float(np.hypot(wind_u, wind_v))
+
+        return wind_direction, wind_speed
 
 
 @dataclass
@@ -1222,6 +1478,7 @@ class FlightState(AssemblyState):
     rocket: RocketState
     env: EnvironmentState
     launcher: LauncherState
+    options: SimulationOptionsState
     rasaero_config: RASAeroConfig | None = None
 
     def __post_init__(self):
@@ -1245,8 +1502,8 @@ class FlightState(AssemblyState):
             raise ValueError("RASAero Config must be provided")
         rasaero_config = self.rasaero_config
 
-        rocketpy_rocket = rocket.make()
-        rocketpy_env = env.make()
+        rocketpy_rocket = rocket.make(SimulationOptionsState.default())
+        rocketpy_env = env.make(SimulationOptionsState.default())
 
         if rocket.nose is None:
             raise ValueError("nose must be provided")
@@ -1491,19 +1748,22 @@ class FlightGenerator(ComponentGenerator[FlightState]):
     rocket: RocketGenerator
     env: EnvironmentGenerator
     launcher: LauncherGenerator
+    options: SimulationOptionsGenerator | None = None
     rasaero_config: RASAeroConfig | None = None
 
     _output_type = FlightState
 
     def __post_init__(self):
+        if self.options is None:
+            self.options = SimulationOptionsGenerator()
+
         if self.rocket.aero == "estimate":
             if self.rasaero_config is None:
                 raise ValueError(
                     "rasaero_config must be provided with aero == 'estimate'"
                 )
-            rasaero_config = self.rasaero_config
 
-            flight_state = self.ideal()
+            rocket_state = self.rocket.ideal()
 
             from model.rocket.rasaero import RasAeroII
 
@@ -1524,7 +1784,7 @@ class FlightGenerator(ComponentGenerator[FlightState]):
             elif not aero_data_hash_path.exists():
                 print("hash missing: generating new RASAero aero data")
                 rasaero_doc.extract_aero_plots()
-            elif aero_data_hash_path.read_text(encoding="utf-8") != flight_state.hash():
+            elif aero_data_hash_path.read_text(encoding="utf-8") != rocket_state.hash():
                 print("hash mismatch: generating new RASAero aero data")
                 rasaero_doc.extract_aero_plots()
             else:
@@ -1536,22 +1796,13 @@ class FlightGenerator(ComponentGenerator[FlightState]):
 
             # write hash to file
             aero_data_hash_path.write_text(
-                flight_state.hash(), encoding="utf-8")
+                rocket_state.hash(),
+                encoding="utf-8"
+            )
 
     @property
     def name(self) -> str:
         return self.rocket.name
 
-# TODO: Read and write to file
-# TODO: Implement Monte Carlo Method
-# TODO: Implement failures (as a method parameter)
-
-
-# TODO: Make _handle a class method?
-# TODO: Overload Normal and Uniform to support all reasonable inputs
-# TODO: Add default variation (using `rocket` as an input to scale appropriately`)
-# TODO: Add Aero.powerOn()... wrapper to support ideal and sample
+# TODO: Read and write to file?
 # TODO: Add add_eccentricity...
-
-
-# TODO: Add categories and default distributions for all

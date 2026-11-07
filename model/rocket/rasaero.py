@@ -395,10 +395,6 @@ class RasAeroII:
         self._working_path = None if working_path is None else pathlib.Path(
             working_path)
 
-    # @property
-    # def exe_path(self) -> str:
-    #     return "C:/Program Files (x86)/RASAero II/RASAero II.exe"
-
     @staticmethod
     def __get_documents_path() -> pathlib.Path:
         """Return the user's Windows Documents folder."""
@@ -538,14 +534,13 @@ class RasAeroII:
 
 
 # TODO: Investigate "Mach-Alt"
-# TODO: Convert from my rocket to RASAeroII document
 # TODO: Add motor to RAS Aero II
 #   TODO: Copy existing RAS Aero II rasp.eng file
 #   TODO: Create new rasp.eng file with thrust curve appended to end
 #   TODO: Set sustainer name to motor name
 # TODO: Do "Run Test" and then process output into csv (via pandas)
 
-# TODO: Create power_on() and power_off() drag curve as a f(M, alpha, Re)
+# TODO: Create power_on() and power_off() drag curve as f(M, alpha, Re)
 
 """
 

@@ -61,7 +61,7 @@
       <PartType>Transition</PartType>
     </Transition>
     <BoatTail>
-      <Length>2.6771668</Length>
+      <Length>0.88582725</Length>
       <Diameter>3.2677183000000003</Diameter>
       <Location>91.32682097</Location>
       <RearDiameter>3.2637812900000003</RearDiameter>
@@ -69,7 +69,7 @@
       <PartType>BoatTail</PartType>
     </BoatTail>
     <Surface>Smooth (Zero Roughness)</Surface>
-    <CP>67.22849295283845</CP>
+    <CP>67.22882254430742</CP>
     <ModifiedBarrowman>True</ModifiedBarrowman>
     <Turbulence>False</Turbulence>
     <SustainerNozzle>1.6063000800000002</SustainerNozzle>

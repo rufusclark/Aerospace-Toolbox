@@ -561,6 +561,11 @@ class Motor:
         else:
             return self.thrust_curve.motor_name
 
+    @property
+    def dry_mass(self) -> float:
+        """motor mass [kg] without propellent"""
+        return self.total_mass - self.prop_mass
+
     def to_RASP_file(self, filepath: str | pathlib.Path) -> None:
         """filepath should end in '.eng'"""
         if isinstance(filepath, str):
@@ -706,6 +711,18 @@ class Motor:
         return replace(
             self,
             thrust_curve=self.thrust_curve.round_to_impulse(impulse)
+        )
+
+    def scale(self, time_factor: float = 1, thrust_factor: float = 1, mass_factor: float = 1) -> "Motor":
+        """return a copy of the motor with the thrust curve scaled by time and thrust and mass scaled by mass_factor"""
+        return replace(
+            self,
+            thrust_curve=self.thrust_curve.scale(
+                time_factor=time_factor,
+                thrust_factor=thrust_factor
+            ),
+            total_mass=self.total_mass * mass_factor,
+            prop_mass=self.prop_mass * mass_factor
         )
 
 

@@ -5,6 +5,9 @@ __pycache__/
 # VSCode Settings
 .vscode/
 
+# Env files
+*.env
+
 # Logs
 *.log
 
@@ -16,9 +19,6 @@ outputs/
 
 # Software
 software/
-
-# Docs
-docs/
 
 # Models
 model/*

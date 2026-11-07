@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 import rocketpy
 
-from model.rocket.rocket import FlightState, RocketState, LauncherState, EnvironmentState, FlightGenerator
+from model.rocket.rocket import FlightState, RocketState, LauncherState, EnvironmentState, FlightGenerator, SimulationOptionsState
 from model.rocket.motor import Motor
 from model.util.output import *
 
@@ -37,6 +37,7 @@ class Flight:
         rocket = flight_state.rocket
         env = flight_state.env
         launcher = flight_state.launcher
+        options = flight_state.options
 
         self.name = name or rocket.name
         self.verbose = verbose
@@ -46,6 +47,7 @@ class Flight:
             rocket=rocket,
             env=env,
             launcher=launcher,
+            options=options,
             max_time=max_time,
             max_time_step=max_time_step
         )
@@ -55,6 +57,7 @@ class Flight:
         rocket: RocketState,
         env: EnvironmentState,
         launcher: LauncherState,
+        options: SimulationOptionsState,
         *,
         max_time: int | None = None,
         max_time_step: float | None = None,
@@ -66,8 +69,8 @@ class Flight:
         max_time = max_time or (300 if small_rocket else 1200)
 
         flight = rocketpy.Flight(
-            rocket=rocket.make(),
-            environment=env.make(),
+            rocket=rocket.make(options),
+            environment=env.make(options),
             rail_length=launcher.length,
             inclination=launcher.inclination,
             heading=launcher.heading,
@@ -96,6 +99,7 @@ class Flight:
                     rocket=rocket,
                     env=env,
                     launcher=launcher,
+                    options=options,
                     max_time=new_max_time,
                     max_time_step=new_max_time_step,
                     _n_retry=_n_retry + 1
@@ -153,6 +157,10 @@ class Flight:
     @property
     def max_dynamic_pressure_time(self) -> float:
         return self.rocketpy_flight.max_dynamic_pressure_time
+
+    @property
+    def max_mach(self) -> float:
+        return self.rocketpy_flight.max_mach_number
 
     @property
     def parachute_events(self):
@@ -299,6 +307,20 @@ class Flight:
     def y_landing_position(self) -> float:
         """positive north of launch site"""
         return self.rocketpy_flight.y_impact
+
+    @property
+    def impact_velocity(self) -> float:
+        """ground impact velocity [m/s]"""
+        return self.rocketpy_flight.impact_velocity
+
+    @property
+    def impact_energy(self) -> float:
+        """ground impact energy [J]"""
+        mass_without_motor = self.flight_state.rocket.mass_without_motor
+        motor_dry_mass = self.flight_state.rocket.motor.motor.dry_mass  # type: ignore
+        impact_mass = mass_without_motor + motor_dry_mass
+
+        return 0.5 * self.impact_velocity**2 * impact_mass
 
 
 class FlightPlots(PlotBase[Flight]):
