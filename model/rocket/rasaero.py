@@ -1,5 +1,6 @@
 from dataclasses import dataclass, fields, is_dataclass
 from pywinauto import Desktop, Application, findwindows
+from pywinauto.keyboard import send_keys
 import xml.etree.ElementTree as ET
 from ctypes import wintypes
 from typing import Literal
@@ -10,6 +11,7 @@ import ctypes
 import shutil
 
 from model.util.path import pathManager
+from model.util.msaa import inspect_accessible, get_obj
 
 
 def m_to_ft(x): return x * 3.28084
@@ -465,17 +467,23 @@ class RasAeroII:
 
         # shortcut to open files
         main.set_focus()
-        main.type_keys("^o")
+        main.type_keys("^o")  # ctrl + o
 
-        # write file to open dialog "File name:" box
-        file_name_box = main.child_window(
-            auto_id="1148", control_type="Edit")
-        file_name_box.wait("visible", timeout=10)
-        file_name_box.set_edit_text(filename)
+        # open file - using shortcuts
+        send_keys("%n")  # alt + n
+        sleep(0.01)
+        send_keys(filename, with_spaces=True)
+        send_keys("{ENTER}")
 
+        # open file - using uia
+        # write filename to open dialog "File name:" box
+        # file_name_box = main.child_window(
+        #     auto_id="1148", control_type="Edit")
+        # file_name_box.wait("visible", timeout=10)
+        # file_name_box.set_edit_text(filename)
         # press open button
-        file_name_box.set_focus()
-        file_name_box.type_keys("{ENTER}")
+        # file_name_box.set_focus()
+        # file_name_box.type_keys("{ENTER}")
 
         # save screenshot
         main.wait("ready", timeout=10)
@@ -483,11 +491,18 @@ class RasAeroII:
         screenshot.save(self.data_path / "rocket.png")
         print(f"Saved RASAero screenshot to {self.data_path / "rocket.png"}")
 
-        # open Aero Plots
-        aero_button = main.child_window(
-            title="Aero Plots", control_type="Button")
-        aero_button.wait("enabled", timeout=10)
-        aero_button.click_input()
+        # open Aero Plots - using win32 and msaa
+        main_win32 = Desktop(backend="win32").window(handle=main.handle)
+        tool_strip = main_win32.child_window(
+            title="ToolStrip1", control_type="System.Windows.Forms.ToolStrip")
+        accessible_obj = get_obj(tool_strip.handle)
+        accessible_obj.accDoDefaultAction(9)
+
+        # open Aero Plots - using uia
+        # aero_button = main.child_window(
+        #     title="Aero Plots", control_type="Button")
+        # aero_button.wait("ready", timeout=10)
+        # aero_button.click_input()
 
         # wait for aero plots to open
         aero_plots = Desktop(backend="win32").window(title="Aero Plots")
@@ -495,6 +510,7 @@ class RasAeroII:
 
         # open export to csv dialog
         aero_plots.set_focus()
+        sleep(0.01)
         aero_plots.type_keys("%fet")
 
         if self.default_aero_plots_path.exists():
