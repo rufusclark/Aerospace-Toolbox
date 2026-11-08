@@ -20,8 +20,6 @@ def total_impulse_to_motor_class(total_impulse: float):
 
 T = TypeVar("T", float, Sequence[float])
 
-# TODO: CachedProperties?
-
 
 @dataclass(frozen=True)
 class ThrustCurve:
@@ -1054,7 +1052,7 @@ class MotorSearch:
                                 print(
                                     f"No thrust curve data for {motor}"
                                 )
-                                motor.thrustCurvePath = "MISSING"
+                            motor.thrustCurvePath = "MISSING"
                             continue
 
                         RASP_ENG = base64.b64decode(
@@ -1069,7 +1067,6 @@ class MotorSearch:
                             )
 
                     motor.thrustCurvePath = str(RASP_ENG_path)
-                    # motor._thrust_data = motor.read_thrust_curve()
 
                     out_motors.append(motor)
 
