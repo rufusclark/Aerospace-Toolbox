@@ -11,6 +11,22 @@ A collection of tools and scripts for the design and analysis of aerospace vehic
 * Implements a wrapper around [xFoil](https://web.mit.edu/drela/Public/web/xfoil/) (2D Airfoil Aerodynamic Simulation Program) to predict the performance of airfoils programmatically and compare them efficiently.
 * Implements the United States Standard Atmosphere 1976 based on the [ussa1976](https://pypi.org/project/ussa1976/) library with additional extensions and plotting to determine atmospheric properties up to 1000 km.
 
+## Aircraft
+
+### Features
+
+* Initial aircraft sizing toolkit for model aircraft.
+* Aircraft constraint analysis and preliminary design assessment.
+* Mass estimation using supplied geometry and material properties.
+* Aerodynamic performance estimation using xFoil simulations and lifting-line theory.
+* Airfoil sizing based on spar geometry, structural requirements and aerodynamic performance.
+* Battery sizing to meet range and endurance requirements.
+* Mass budgeting, mass distribution and static stability analysis.
+* Landing gear positioning based on preferred placement and mass distribution.
+* Iterative aircraft design and component sizing to satisfy stability, structural and performance requirements and achieve overall design convergence.
+
+![Sample Aircraft Planform](./docs/images/sample-aircraft-planform.svg)
+
 ## Rocketry
 
 ### Features

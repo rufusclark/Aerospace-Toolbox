@@ -27,6 +27,7 @@ model/*
 !model/rocket
 !model/core
 !model/util
+!model/aircraft
 
 # Analysis
 *_analysis.py
@@ -38,5 +39,4 @@ model/*
 pdf_converter.py
 run_all.py
 weather.py
-Aircraft System Model.ipynb
 hot_fire.py
