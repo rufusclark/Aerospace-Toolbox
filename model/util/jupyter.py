@@ -1,11 +1,21 @@
 import pathlib
 
 __all__ = (
+    "is_notebook",
     "embed_img",
     "hide_warnings",
     "enable_crash_logging",
-    "install_requirements"
+    "install_requirements",
 )
+
+
+def is_notebook() -> bool:
+    try:
+        from IPython import get_ipython  # type: ignore
+        shell = get_ipython()
+        return shell is not None and shell.__class__.__name__ == "ZMQInteractiveShell"
+    except:
+        return False
 
 
 def embed_img(path: str | pathlib.Path, width: int = 600) -> None:

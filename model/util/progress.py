@@ -1,3 +1,5 @@
+from IPython.display import display, update_display
+from model.util.jupyter import is_notebook
 from datetime import timedelta
 from time import time
 import sys
@@ -24,6 +26,12 @@ class ProgressBar:
         self.name = name
         self.tasks = tasks
         self.start_time = time()
+
+        self.is_notebook = is_notebook()
+        if self.is_notebook:
+            self.display_id = f"{name}-notebook"
+            display("", display_id=self.display_id)
+
         self.update(0)
 
     def update(self, tasks_completed: int, msg: str = "") -> None:
@@ -41,17 +49,23 @@ class ProgressBar:
         elapsed_td = timedelta(seconds=elapsed)
         remaining_td = timedelta(seconds=remaining)
 
-        sys.stdout.write(
-            f"\r\033[2K"
+        fmt_msg = (
             f"{f"{name} " if name else ""}[{bar}] {percent:.2%} "
             f"(elapsed: {format_elapsed(elapsed_td)} - "
             f"remaining: {format_elapsed(remaining_td)})"
-            f"{f" - {msg}" if msg else ""}")
-        sys.stdout.flush()
+            f"{f" - {msg}" if msg else ""}"
+        )
 
-        if self.tasks >= tasks_completed:
-            sys.stdout.write(f"\n")
+        if self.is_notebook:
+            update_display(fmt_msg, display_id=self.display_id)
+
+        else:
+            sys.stdout.write(f"\r\033[2K{fmt_msg}")
             sys.stdout.flush()
+
+            if self.tasks >= tasks_completed:
+                sys.stdout.write(f"\n")
+                sys.stdout.flush()
 
     def complete(self) -> None:
         self.update(self.tasks)

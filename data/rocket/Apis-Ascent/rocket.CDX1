@@ -2,7 +2,7 @@
   <RocketDesign>
     <NoseCone>
       <Length>19.68505</Length>
-      <Diameter>4.015750199999999</Diameter>
+      <Diameter>5.905515</Diameter>
       <Shape>Von Karman Ogive</Shape>
       <BluntRadius>0.1181103</BluntRadius>
       <Location>0</Location>
@@ -11,7 +11,7 @@
     </NoseCone>
     <BodyTube>
       <Length>40.496084859999996</Length>
-      <Diameter>4.015750199999999</Diameter>
+      <Diameter>5.905515</Diameter>
       <Location>19.68505</Location>
       <LaunchLugDiameter>0</LaunchLugDiameter>
       <LaunchLugLength>0</LaunchLugLength>
@@ -27,7 +27,7 @@
     </BodyTube>
     <BodyTube>
       <Length>28.913401439999998</Length>
-      <Diameter>4.015750199999999</Diameter>
+      <Diameter>5.905515</Diameter>
       <Location>60.18113486</Location>
       <LaunchLugDiameter>0</LaunchLugDiameter>
       <LaunchLugLength>0</LaunchLugLength>
@@ -69,10 +69,10 @@
       <PartType>BoatTail</PartType>
     </BoatTail>
     <Surface>Smooth (Zero Roughness)</Surface>
-    <CP>67.22882254430742</CP>
+    <CP>56.38441759281374</CP>
     <ModifiedBarrowman>True</ModifiedBarrowman>
     <Turbulence>False</Turbulence>
-    <SustainerNozzle>1.6063000800000002</SustainerNozzle>
+    <SustainerNozzle>2.362206</SustainerNozzle>
     <FileVersion>2</FileVersion>
     <Booster1Nozzle>0</Booster1Nozzle>
     <Booster2Nozzle>0</Booster2Nozzle>
@@ -107,7 +107,7 @@
     <Simulation>
       <SustainerEngine>8429-M2020-IM-P</SustainerEngine>
       <SustainerLaunchWt>31.515624</SustainerLaunchWt>
-      <SustainerNozzleDiameter>1.6063000800000002</SustainerNozzleDiameter>
+      <SustainerNozzleDiameter>2.362206</SustainerNozzleDiameter>
       <SustainerCG>59.75590388649994</SustainerCG>
       <SustainerIgnitionDelay>0</SustainerIgnitionDelay>
       <Booster1LaunchWt>0</Booster1LaunchWt>
