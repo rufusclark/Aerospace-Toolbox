@@ -39,7 +39,7 @@ airfoil_type = (
 )
 
 nose_types = Literal[
-    "von karman", "conical", "ogive", "lvhaack", "powerseries"
+    "von karman", "conical", "ogive", "lvhaack", "powerseries", "elliptical"
 ]
 
 parachute_types = Literal["apogee", "motor ejection", "altitude"]
@@ -670,7 +670,7 @@ class RocketGenerator(ComponentGenerator[RocketState]):
         )
 
     @overload
-    def add_nose(self, length: Q, kind: Literal["von karman", "conical", "ogive", "lvhaack"], *, position: Q = 0, blunt_radius: float | None = None):
+    def add_nose(self, length: Q, kind: Literal["von karman", "conical", "ogive", "lvhaack", "elliptical"], *, position: Q = 0, blunt_radius: float | None = None):
         ...
 
     @overload
@@ -1513,7 +1513,8 @@ class FlightState(AssemblyState):
 
         nose_map = {
             "von karman": "Von Karman Ogive",
-            "ogive": "Tangent Ogive"
+            "ogive": "Tangent Ogive",
+            "elliptical": "Elliptical"
         }
         nose_shape = nose_map.get(rocket.nose.kind, None)
         if nose_shape is None:
@@ -1645,17 +1646,29 @@ class FlightState(AssemblyState):
         if len(sorted_parachutes) == 0:
             recovery = None
         else:
+            event_type_map = {
+                "apogee": "Apogee",
+                "altitude": "Altitude"
+            }
+
             if len(sorted_parachutes) == 1:
                 main = sorted_parachutes[0]
                 drogue = None
+
+                event_type_1 = event_type_map.get(main.trigger, None)
+                if event_type_1 is None:
+                    raise ValueError(f"{main.trigger} is not supported")
+
+                recovery = rasaero._Recovery(
+                    Altitude1=0 if main.deploy_altitude is None else m_to_ft(
+                        main.deploy_altitude),
+                    Size1=m_to_in(main.diameter),
+                    EventType1=event_type_1,  # type: ignore
+                    CD1=main.cd
+                )
             else:
                 main = sorted_parachutes[0]
                 drogue = sorted_parachutes[1]
-
-                event_type_map = {
-                    "apogee": "Apogee",
-                    "altitude": "Altitude"
-                }
 
                 event_type_1 = event_type_map.get(main.trigger, None)
                 if event_type_1 is None:

@@ -90,7 +90,7 @@ class XMLDataclass:
         return ET.tostring(root, encoding="unicode")
 
 
-NoseConeShapes = Literal["Von Karman Ogive", "Tangent Ogive"]
+NoseConeShapes = Literal["Von Karman Ogive", "Tangent Ogive", "Elliptical"]
 
 
 @dataclass
@@ -195,7 +195,16 @@ class _BoatTail(XMLDataclass):
     PartType: str = "BoatTail"
 
 
-Surfaces = Literal["Polished", "Smooth (Zero Roughness)"]
+Surfaces = Literal[
+    "Polished",
+    "Smooth (Zero Roughness)",
+    "Sheet Metal",
+    "Smooth Paint",
+    "Camouflage Paint",
+    "Rough Camouflage Paint",
+    "Galvanized Metal",
+    "Cast Iron (Very Rough)"
+]
 
 
 @dataclass
