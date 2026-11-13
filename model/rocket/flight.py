@@ -3,14 +3,19 @@ from scipy.integrate import cumulative_trapezoid
 import pandas as pd
 import numpy as np
 import rocketpy
+import warnings
+import time
 
 from model.rocket.rocket import FlightState, RocketState, LauncherState, EnvironmentState, FlightGenerator, SimulationOptionsState
 from model.rocket.motor import Motor
 from model.util.output import *
 
 
-class SimulationFailedError(RuntimeError):
-    ...
+# fmt: off
+class SimulationError(Exception): ...
+class SimulationFailedError(RuntimeError, SimulationError): ...
+class SimulationTimeoutError(TimeoutError, SimulationError): ...
+# fmt: on
 
 
 class Flight:
@@ -25,6 +30,7 @@ class Flight:
             terminate_on_apogee: bool = False,
             max_time_step: float | None = None,
             max_time: int | None = None,
+            timeout: float = 30
     ):
         self.plots = FlightPlots(self)  # type: ignore
         self.info = FlightInfo(self)
@@ -49,7 +55,8 @@ class Flight:
             launcher=launcher,
             options=options,
             max_time=max_time,
-            max_time_step=max_time_step
+            max_time_step=max_time_step,
+            timeout=timeout
         )
 
     def __simulate(
@@ -58,24 +65,43 @@ class Flight:
         env: EnvironmentState,
         launcher: LauncherState,
         options: SimulationOptionsState,
+        timeout: float,
         *,
         max_time: int | None = None,
         max_time_step: float | None = None,
-        _n_retry: int = 0
+        _n_retry: int = 0,
     ) -> rocketpy.Flight:
         small_rocket = self.total_impulse < 64 or self.motor_burnout_time < 1.2
 
         max_time_step = max_time_step or (0.01 if small_rocket else np.inf)
         max_time = max_time or (300 if small_rocket else 1200)
 
+        rocketpy_rocket = rocket.make(options)
+        rocketpy_env = env.make(options)
+
+        # timeout callback
+        t0 = time.time()
+
+        def timeout_callback(a, b, c):
+            if time.time() > t0 + timeout:
+                raise SimulationTimeoutError(
+                    f"Simulation timeout after {timeout} seconds"
+                )
+        rocketpy_rocket.add_parachute(
+            name="Timeout Callback",
+            cd_s=0,
+            trigger=timeout_callback
+        )
+
         flight = rocketpy.Flight(
-            rocket=rocket.make(options),
-            environment=env.make(options),
+            rocket=rocketpy_rocket,
+            environment=rocketpy_env,
             rail_length=launcher.length,
             inclination=launcher.inclination,
             heading=launcher.heading,
             max_time_step=max_time_step,
             max_time=max_time,
+            min_time_step=0.01,  # type: ignore
             time_overshoot=True,
             verbose=self.verbose,
             terminate_on_apogee=self.terminate_on_apogee,
@@ -90,7 +116,6 @@ class Flight:
                 new_max_time = [1200, 2400][_n_retry]
                 new_max_time_step = [0.01, 0.001][_n_retry]
 
-                import warnings
                 warnings.warn(
                     f"Retry={_n_retry}. Simulation Time = Maximum Simulation Time = {max_time}s. Consider decreasing the max_time_step. Retrying with max_time_step={new_max_time_step} and max_time={new_max_time}"
                 )
@@ -100,6 +125,7 @@ class Flight:
                     env=env,
                     launcher=launcher,
                     options=options,
+                    timeout=timeout,
                     max_time=new_max_time,
                     max_time_step=new_max_time_step,
                     _n_retry=_n_retry + 1
@@ -156,11 +182,19 @@ class Flight:
 
     @property
     def max_dynamic_pressure_time(self) -> float:
-        return self.rocketpy_flight.max_dynamic_pressure_time
+        return self.rocketpy_flight.max_dynamic_pressure_time  # type: ignore
 
     @property
     def max_mach(self) -> float:
         return self.rocketpy_flight.max_mach_number
+
+    @property
+    def max_acceleration(self) -> float:
+        return self.rocketpy_flight.max_acceleration
+
+    @property
+    def max_dynamic_pressure(self) -> float:
+        return self.rocketpy_flight.max_dynamic_pressure
 
     @property
     def parachute_events(self):
@@ -736,7 +770,10 @@ class FlightInfo(InfoBase[Flight]):
             "Total Impulse [Ns]": model.total_impulse,
             "Maximum Thrust [N]": model.max_thrust(),
             "Average Thrust [N]": model.average_thrust(),
-            "Burn Time [s]": model.motor_burnout_time
+            "Burn Time [s]": model.motor_burnout_time,
+            "Velocity Off Launcher [m/s]": model.out_of_rail_velocity,
+            "Maximum Acceleration [m/s^2]": model.max_acceleration,
+            "Maximum Dynamic Pressure [Pa]": model.max_dynamic_pressure
         }, index=[0])
 
         return df

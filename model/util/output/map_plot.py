@@ -3,6 +3,7 @@ from __future__ import annotations
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
+from matplotlib.colors import LogNorm
 import matplotlib.patches as mpatches
 import matplotlib.patheffects as pe
 import matplotlib.path as mpath
@@ -118,7 +119,7 @@ class MapPlots:
     def add_ideal_point(self, x: float, y: float, *, label="ideal landing"):
         self.add_point(x, y, label, colour_palette[3])
 
-    def add_landing_points(self, x_points, y_points, *, labels: list[str] | None = None, label="Landing", marker: str = "x", colour=colour_palette[0]):
+    def add_landing_points(self, x_points, y_points, *, labels: list[str] | None = None, label="landing", marker: str = "x", colour=colour_palette[0]):
         if labels is not None:
             x_points = np.asarray(x_points)
             y_points = np.asarray(y_points)
@@ -146,7 +147,10 @@ class MapPlots:
                 label=label
             )
 
-    def add_landing_points_with_colourmap(self, x_points, y_points, c, cbar_label: str, *, scatter_label: str = "Landing", cmap: str = "viridis"):
+    def add_landing_points_with_colourmap(self, x_points, y_points, c, cbar_label: str, *, scatter_label: str = "landing", cmap: str = "viridis", log: bool = False):
+        c_min = min(c)
+        c_max = max(c)
+
         sc = self.ax.scatter(
             x_points,
             y_points,
@@ -155,14 +159,15 @@ class MapPlots:
             s=50,
             alpha=0.8,
             cmap=cmap,
-            # vmin=...,
-            # vmax=...,
+            norm=LogNorm(vmin=c_min, vmax=c_max) if log else None,
             transform=self.projection,
             label=scatter_label
         )
 
         cbar = self.fig.colorbar(sc)
         cbar.set_label(cbar_label)
+        cbar.set_ticks([c_min, c_max])
+        cbar.set_ticklabels([f"{c_min:.2g}", f"{c_max:.2g}"])
 
     def add_circle_with_label(self, x_center: float, y_center: float, radius: float, label: str = "", color: str = "white"):
         circle = mpatches.Circle(

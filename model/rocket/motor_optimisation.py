@@ -857,8 +857,9 @@ class MotorOptimisation:
         progress_bar.complete()
 
         assert table is not None
-        table.show(
-            sort_column="Altitude [km]", sort_ascending=False, suppress_prints=not verbose)
+        if verbose:
+            table.show(
+                sort_column="Altitude [km]", sort_ascending=False, suppress_prints=not verbose)
         table.save(
             sort_column="Altitude [km]", sort_ascending=False, suppress_prints=not verbose)
 

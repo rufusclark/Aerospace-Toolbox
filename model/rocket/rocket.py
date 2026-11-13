@@ -149,9 +149,16 @@ class NormalDistribution(Quantity):
         )
 
 
+class CustomDistribution(Quantity):
+    def __init__(self, ideal: float, sample: Callable[[], float]) -> None:
+        super().__init__(ideal)
+        self.sample = sample
+
+
 Uniform = UniformDistribution
 Normal = NormalDistribution
 Fixed = Quantity
+Custom = CustomDistribution
 
 Q = Quantity | float
 
@@ -393,7 +400,7 @@ class SimulationOptionsGenerator(ComponentGenerator[SimulationOptionsState]):
         def resolve(value: bool | float) -> bool:
             if isinstance(value, bool):
                 return value
-            return np.random.random() < value
+            return rng.random() < value
 
         return SimulationOptionsState(
             **{
@@ -807,15 +814,15 @@ class RocketGenerator(ComponentGenerator[RocketState]):
         ))
 
     @overload
-    def add_parachute(self, name: str, cd: Q, diameter: Q, *, trigger: Literal["apogee"]):
+    def add_parachute(self, name: str, cd: Q, diameter: Q, *, trigger: Literal["apogee"], lag: Q = 0):
         ...
 
     @overload
-    def add_parachute(self, name: str, cd: Q, diameter: Q, *, motor_delay: Q, trigger: Literal["motor ejection"]):
+    def add_parachute(self, name: str, cd: Q, diameter: Q, *, motor_delay: Q, trigger: Literal["motor ejection"], lag: Q = 0):
         ...
 
     @overload
-    def add_parachute(self, name: str, cd: Q, diameter: Q, *, deploy_altitude: Q, trigger: Literal["altitude"]):
+    def add_parachute(self, name: str, cd: Q, diameter: Q, *, deploy_altitude: Q, trigger: Literal["altitude"], lag: Q = 0):
         ...
 
     def add_parachute(
@@ -825,6 +832,7 @@ class RocketGenerator(ComponentGenerator[RocketState]):
         diameter: Q,
         *,
         trigger: parachute_types = "apogee",
+        lag: Q = 0,
         motor_delay: Q | None = None,
         deploy_altitude: Q | None = None
     ):
@@ -849,6 +857,10 @@ class RocketGenerator(ComponentGenerator[RocketState]):
             motor_delay=None if motor_delay is None else _handle_input(
                 motor_delay,
                 default=lambda x: Normal.from_mean(x, 0.4)
+            ),
+            lag=_handle_input(
+                lag,
+                default=lambda x: Custom(x, lambda: max(0, rng.normal(x, 1)))
             ),
             deploy_altitude=None if deploy_altitude is None else _handle_input(
                 deploy_altitude,
@@ -1181,6 +1193,7 @@ class ParachuteState(ComponentState[rocketpy.Parachute]):
     cd: float
     diameter: float
     trigger: parachute_types
+    lag: float
     motor_delay: float | None
     deploy_altitude: float | None
 
@@ -1209,7 +1222,8 @@ class ParachuteState(ComponentState[rocketpy.Parachute]):
             name=self.name,
             cd_s=self.cd_s,
             trigger=trigger_func,
-            radius=self.radius
+            radius=self.radius,
+            lag=self.lag  # type: ignore
         )
 
 
@@ -1219,6 +1233,7 @@ class ParachuteGenerator(ComponentGenerator[ParachuteState]):
     cd: Quantity
     diameter: Quantity
     trigger: parachute_types
+    lag: Quantity
     motor_delay: Quantity | None = None
     deploy_altitude: Quantity | None = None
 
@@ -1818,4 +1833,3 @@ class FlightGenerator(ComponentGenerator[FlightState]):
         return self.rocket.name
 
 # TODO: Read and write to file?
-# TODO: Add add_eccentricity...

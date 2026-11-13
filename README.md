@@ -64,6 +64,7 @@ The Monte Carlo simulation supports fixed values, normal distributions and unifo
 diameter = Normal(76 / 1000, std=1 / 1000)
 heading = Uniform(0, 360)
 inclination = Fixed(85)
+lag = Custom(0, lambda: abs(np.random.normal(0, 2)))
 ```
 
 The distribution of all design inputs, environmental and launch parameters can be varied along with the probability of experiencing different failures.
@@ -105,6 +106,7 @@ Please note these only apply where relevant and they have not be overwrite by sp
 | Diameter | Normal(x̄=x, σ=0.4mm) |
 | Motor delay | Normal(x̄=x, σ=0.4s) |
 | Deploy altitude | Normal(x̄=x, σ=20m) |
+| Lag | max(0s, Normal(x̄=x, σ=1s)) |
 | Motor | |
 | Position | Normal(x̄=x, σ=4mm) |
 | Thrust multiplier | Normal(x̄=x, σ=5%) |

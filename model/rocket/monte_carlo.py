@@ -1,10 +1,10 @@
 from model.rocket.rocket import FlightGenerator
-from model.rocket.flight import Flight
+from model.rocket.flight import Flight, SimulationTimeoutError
 from model.util.output import *
 from model.util.progress import ProgressBar
 
 from typing import Literal
-
+import warnings
 import numpy as np
 
 
@@ -19,7 +19,8 @@ class MonteCarlo:
             n: int = 100,
             verbose: bool = False,
             max_time_step: float | None = None,
-            max_time: int | None = None
+            max_time: int | None = None,
+            timeout: float = 30
     ) -> None:
         self.plots = MonteCarloPlots(self)
         self.info = MonteCarloInfo(self)
@@ -34,15 +35,22 @@ class MonteCarlo:
 
         progress = ProgressBar(n, name="monte-carlo")
 
-        for i in range(n):
-            last_flight = Flight(
-                flight_state=flight_generator.sample(),
-                name=name,
-                verbose=verbose,
-                terminate_on_apogee=False,
-                max_time_step=max_time_step,
-                max_time=max_time
-            )
+        i = 0
+        while i < n:
+            try:
+                last_flight = Flight(
+                    flight_state=flight_generator.sample(),
+                    name=name,
+                    verbose=verbose,
+                    terminate_on_apogee=False,
+                    max_time_step=max_time_step,
+                    max_time=max_time,
+                    timeout=timeout
+                )
+            except SimulationTimeoutError as e:
+                warnings.warn(f"i: {i} error: {e}")
+                continue
+
             self.flights[i] = last_flight
             progress.update(
                 i+1,
@@ -54,6 +62,7 @@ class MonteCarlo:
                     ],
                 )
             )
+            i += 1
 
     @property
     def launch_point(self) -> tuple[float, float]:
@@ -71,7 +80,7 @@ class MonteCarloPlots(PlotBase[MonteCarlo]):
         self,
         ax: Axes,
         satellite_images: bool = True,
-        impact_energy: bool = True,
+        impact_energy: Literal["linear", "log"] | None = None,
         width: float | None = None,
         range_rings_radii: list[float] | None = None,
         range_rings_unit: Literal["m", "km", "nm"] | None = None,
@@ -113,11 +122,12 @@ class MonteCarloPlots(PlotBase[MonteCarlo]):
             map_plots.add_satellite_imagery()
 
         map_plots.add_launch_point()
-        if impact_energy:
+        if impact_energy is not None:
             map_plots.add_landing_points_with_colourmap(
                 x_points, y_points, impact_energies,
                 cbar_label="Impact Energy [J]",
                 cmap="cividis",
+                log=True if impact_energy == "log" else False
             )
         else:
             map_plots.add_landing_points(x_points, y_points, labels=labels)
