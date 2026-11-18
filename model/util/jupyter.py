@@ -6,6 +6,8 @@ __all__ = (
     "hide_warnings",
     "enable_crash_logging",
     "install_requirements",
+    "header",
+    "table"
 )
 
 
@@ -69,3 +71,36 @@ def install_requirements() -> None:
     ])
 
     print("Requirements installed")
+
+
+def header(title, subtitle=""):
+    from IPython.display import display, HTML  # type: ignore
+    from html import escape
+
+    display(HTML(f"""
+    <div style="
+        color: var(--vscode-editor-foreground, var(--jp-ui-font-color1));
+        border-bottom: 1px solid var(--vscode-panel-border, var(--jp-border-color1));
+        padding-bottom: 8px;
+        margin-bottom: 15px;
+    ">
+        <h2 style="margin:0">{escape(title)}</h2>
+        <div style="opacity:0.65; margin-top:4px">{escape(subtitle)}</div>
+    </div>
+    """))
+
+
+def table(df):
+    import itables
+
+    itables.init_notebook_mode()
+
+    itables.show(
+        df,
+        scrollX=True,
+        paging=False,
+        columnDefs=[
+            {"className": "dt-left", "targets": [0]},
+            {"className": "dt-right", "targets": "_all"}
+        ]
+    )

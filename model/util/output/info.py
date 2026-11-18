@@ -6,6 +6,7 @@ from functools import wraps
 
 import pandas as pd
 from openpyxl.styles import Side, Border, Font, Alignment
+import model.util.jupyter as jupyter
 
 
 __all__ = [
@@ -334,15 +335,22 @@ class Table(Generic[T, P]):
             df = self.__transpose(df)
 
         if not suppress_prints and self.path is not None:
-            print(self.path.title)
+            title = self.path.title.replace(".", " ").replace("-", " ").title()
 
-        print(df.to_string(
-            index=False,
-            float_format="{:.3f}".format
-        ))
+            if jupyter.is_notebook():
+                jupyter.header(title)
 
-# TODO: Delete old path implementation
-# TODO: Delete old decorator implementation
+            else:
+                print(title)
+
+        if jupyter.is_notebook():
+            jupyter.table(df)
+
+        else:
+            print(df.to_string(
+                index=False,
+                float_format="{:.3f}".format
+            ))
 
 
 def scientific_table() -> Callable[
