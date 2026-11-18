@@ -30,7 +30,7 @@ class Flight:
             terminate_on_apogee: bool = False,
             max_time_step: float | None = None,
             max_time: int | None = None,
-            timeout: float = 30
+            timeout: float = 15
     ):
         self.plots = FlightPlots(self)  # type: ignore
         self.info = FlightInfo(self)

@@ -20,7 +20,7 @@ class MonteCarlo:
             verbose: bool = False,
             max_time_step: float | None = None,
             max_time: int | None = None,
-            timeout: float = 30
+            timeout: float = 15
     ) -> None:
         self.plots = MonteCarloPlots(self)
         self.info = MonteCarloInfo(self)
